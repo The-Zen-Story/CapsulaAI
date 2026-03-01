@@ -249,14 +249,9 @@ const processCapsule = async (capsuleId: string) => {
       usingCloud = true;
     }
 
-    // Source-type routing override:
-    // WEBSITE capsules always use Local LLM for faster extraction speed
-    if (capsule.sourceTypes.includes('WEBSITE') && localCapability !== ModelCapability.UNUSABLE) {
-      console.log(`[Worker] WEBSITE source → forcing Local LLM for faster extraction.`);
-      activeAdapter = localAdapter;
-      activeCapability = localCapability;
-      usingCloud = false;
-    }
+    // Note: WEBSITE capsules previously forced Local LLM, but this caused relationship extraction
+    // to fail with basic models because the BASIC prompt doesn't reliably produce relationships.
+    // Now WEBSITE capsules follow the same routing logic as all other types.
 
     const contentToProcess = usingCloud ? sanitized : capsule.rawContent!;
     const prompt = PromptEngine.getExtractionPrompt(contentToProcess, activeCapability);

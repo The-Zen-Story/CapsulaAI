@@ -135,12 +135,12 @@ export function TaskList() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>维护任务</CardTitle>
-            <Select value={status} onValueChange={setStatus}>
+            <Select value={status ?? 'all'} onValueChange={(v) => setStatus(v === 'all' ? undefined : v)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="全部状态" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">全部状态</SelectItem>
+                <SelectItem value="all">全部状态</SelectItem>
                 <SelectItem value="PENDING">待处理</SelectItem>
                 <SelectItem value="AWAITING_USER_REVIEW">待审核</SelectItem>
                 <SelectItem value="AUTO_APPROVED">自动批准</SelectItem>

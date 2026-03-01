@@ -13,6 +13,9 @@
   },
   "exclude": [
     "scripts",
-    "node_modules"
+    "node_modules",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "src/test-utils/**"
   ]
 }

@@ -8,12 +8,9 @@ import { z } from 'zod';
 const router = Router();
 
 // Helper to get userId from request (reserved for auth middleware)
+// Falls back to 'test-user' when no auth header is present (no real auth yet)
 const getUserId = (req: any): string => {
-  const userId = req.user?.id || req.headers['x-user-id'];
-  if (!userId) {
-    throw new Error('Unauthorized: User ID is required');
-  }
-  return userId as string;
+  return req.user?.id || (req.headers['x-user-id'] as string) || 'test-user';
 };
 
 // Validation schemas
@@ -77,13 +74,13 @@ router.get('/health', async (req, res) => {
 router.get('/tasks', async (req, res) => {
   try {
     const userId = getUserId(req);
-    
+
     // Validate pagination parameters
     const pagination = paginationSchema.safeParse({
       limit: req.query.limit,
       offset: req.query.offset,
     });
-    
+
     if (!pagination.success) {
       return res.status(400).json({
         success: false,
@@ -94,7 +91,7 @@ router.get('/tasks', async (req, res) => {
         },
       });
     }
-    
+
     const { status, taskType } = req.query;
 
     const result = await maintenanceService.getTasks(userId, {
@@ -132,7 +129,7 @@ router.post('/tasks', async (req, res) => {
   try {
     const userId = getUserId(req);
     const parsed = createTaskSchema.parse(req.body);
-    
+
     // Convert to correct type
     const input: import('../services/maintenance/maintenance.service').CreateTaskInput = {
       taskType: parsed.taskType as import('../services/maintenance/maintenance.service').CreateTaskInput['taskType'],
@@ -428,6 +425,29 @@ router.post('/scan/duplicates', async (req, res) => {
   }
 });
 
+// POST /api/maintenance/scan/orphans - Detect orphan entities only
+router.post('/scan/orphans', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+
+    const tasks = await maintenanceService.detectOrphanEntities(userId);
+
+    res.json({
+      success: true,
+      data: { count: tasks.length, tasks },
+    });
+  } catch (error) {
+    console.error('Error scanning orphans:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to scan orphan entities',
+      },
+    });
+  }
+});
+
 // POST /api/maintenance/scan/relations - Discover relations only
 router.post('/scan/relations', async (req, res) => {
   try {
@@ -457,7 +477,7 @@ router.get('/stats', async (req, res) => {
     const userId = getUserId(req);
 
     const { tasks } = await maintenanceService.getTasks(userId, { limit: 1000 });
-    
+
     const totalTasks = tasks.length;
     const pendingTasks = tasks.filter(t => t.status === 'PENDING' || t.status === 'AWAITING_USER_REVIEW').length;
     const approvedTasks = tasks.filter(t => t.status === 'APPROVED' || t.status === 'AUTO_APPROVED').length;

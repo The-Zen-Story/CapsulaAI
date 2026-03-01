@@ -92,15 +92,24 @@ export class PromptEngine {
       ${text}
       `;
     } else {
-      // Few-shot / Direct prompt for basic models
-      return `
-      EXTRACT JSON FROM TEXT. 
-      Schema: ${baseSchema}
-      
-      Text: "${text}"
-      
-      JSON OUTPUT:
-      `;
+      // Structured prompt for basic models — still requires relationships
+      return `You are a knowledge extraction assistant. Extract structured data from the following text and output ONLY valid JSON matching this schema:
+${baseSchema}
+
+RULES:
+1. Extract entities: people, organizations, locations, events, products, dates, money amounts.
+2. For EVERY entity you extract, you MUST create at least one relationship connecting it to another entity.
+   - DATE entities: use OCCURRED_ON to link to an event or action.
+   - MONEY entities: use COSTS or VALUED_AT to link to a product or organization.
+   - PERSON entities: use WORKS_FOR, FOUNDED, or MENTIONED_WITH.
+   - Do NOT output isolated entities with no relationships.
+3. Fill in the 'relationships' array completely.
+4. Output ONLY the JSON object, no explanations.
+
+Text:
+"${text}"
+
+JSON OUTPUT:`;
     }
   }
   static getComplexityAnalysisPrompt(text: string): string {

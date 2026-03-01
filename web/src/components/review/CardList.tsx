@@ -104,12 +104,12 @@ export function CardList() {
               className="pl-10"
             />
           </div>
-          <Select value={status} onValueChange={setStatus}>
+          <Select value={status ?? 'all'} onValueChange={(v) => setStatus(v === 'all' ? undefined : v)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="全部状态" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">全部状态</SelectItem>
+              <SelectItem value="all">全部状态</SelectItem>
               <SelectItem value="NEW">新卡片</SelectItem>
               <SelectItem value="LEARNING">学习中</SelectItem>
               <SelectItem value="REVIEW">复习中</SelectItem>

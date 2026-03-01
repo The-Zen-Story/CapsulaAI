@@ -25,19 +25,30 @@ export class RelationshipService {
 
     for (const rel of relationships) {
       try {
-        // Find or create entities
+        // Normalize types to UPPERCASE to avoid case-mismatch duplicates
+        const fromType = String(rel.fromType || 'OTHER').toUpperCase().trim();
+        const toType = String(rel.toType || 'OTHER').toUpperCase().trim();
+
+        // ── Resolve fromEntity ────────────────────────────────────────────
         const normalizedFromName = rel.from.toLowerCase().trim();
         let fromEntity = await prisma.entity.findFirst({
-          where: { normalizedName: normalizedFromName, type: rel.fromType }
+          where: { normalizedName: normalizedFromName, type: fromType }
         });
         if (!fromEntity) {
           fromEntity = await prisma.entity.create({
             data: {
               canonicalName: rel.from.trim(),
               normalizedName: normalizedFromName,
-              type: rel.fromType
+              type: fromType
             }
           });
+          // Link newly created entity to the capsule so it's not an orphan
+          const existingFromLink = await prisma.capsuleEntity.findFirst({
+            where: { capsuleId, entityId: fromEntity.id }
+          });
+          if (!existingFromLink) {
+            await prisma.capsuleEntity.create({ data: { capsuleId, entityId: fromEntity.id } });
+          }
         } else {
           fromEntity = await prisma.entity.update({
             where: { id: fromEntity.id },
@@ -45,18 +56,26 @@ export class RelationshipService {
           });
         }
 
+        // ── Resolve toEntity ──────────────────────────────────────────────
         const normalizedToName = rel.to.toLowerCase().trim();
         let toEntity = await prisma.entity.findFirst({
-          where: { normalizedName: normalizedToName, type: rel.toType }
+          where: { normalizedName: normalizedToName, type: toType }
         });
         if (!toEntity) {
           toEntity = await prisma.entity.create({
             data: {
               canonicalName: rel.to.trim(),
               normalizedName: normalizedToName,
-              type: rel.toType
+              type: toType
             }
           });
+          // Link newly created entity to the capsule so it's not an orphan
+          const existingToLink = await prisma.capsuleEntity.findFirst({
+            where: { capsuleId, entityId: toEntity.id }
+          });
+          if (!existingToLink) {
+            await prisma.capsuleEntity.create({ data: { capsuleId, entityId: toEntity.id } });
+          }
         } else {
           toEntity = await prisma.entity.update({
             where: { id: toEntity.id },
@@ -64,10 +83,9 @@ export class RelationshipService {
           });
         }
 
-        // Validate relationship type
-        let relType = String(rel.type).toUpperCase();
+        // ── Create/upsert the Relation ────────────────────────────────────
+        const relType = String(rel.type).toUpperCase();
 
-        // Create relationship (upsert to avoid duplicates)
         const relation = await prisma.relation.upsert({
           where: {
             fromEntityId_toEntityId_relationType: {
@@ -81,7 +99,7 @@ export class RelationshipService {
             toEntityId: toEntity.id,
             relationType: relType,
             strength: typeof rel.confidence === 'string' ? parseFloat(rel.confidence) : (rel.confidence || 1.0),
-            createdBy: 'system' // or whatever default
+            createdBy: 'system'
           },
           update: {
             mentionCount: { increment: 1 },

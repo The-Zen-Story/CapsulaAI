@@ -97,7 +97,7 @@ export default function CapsuleDetailPage() {
             size="sm"
             className="gap-1.5"
             onClick={() => reprocessMutation.mutate()}
-            disabled={reprocessMutation.isPending || capsule.status === 'PROCESSING'}
+            disabled={reprocessMutation.isPending}
           >
             {reprocessMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -125,7 +125,20 @@ export default function CapsuleDetailPage() {
                 <p className="text-sm text-blue-600">The AI is analyzing this content. This page will auto-update.</p>
               </div>
             </div>
-            {/* Retry button removed as main Reprocess button covers it, or can keep as fallback if needed */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-100"
+              onClick={() => reprocessMutation.mutate()}
+              disabled={reprocessMutation.isPending}
+            >
+              {reprocessMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Retry
+            </Button>
           </CardContent>
         </Card>
       )}
