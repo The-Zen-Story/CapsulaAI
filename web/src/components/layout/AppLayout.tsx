@@ -1,5 +1,5 @@
 import { Link, useLocation, Outlet } from "react-router-dom";
-import { Database, Activity, Search, Settings, Inbox, Clock } from "lucide-react";
+import { Database, Activity, Search, Settings, Inbox, Clock, Brain, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -20,6 +20,16 @@ const sidebarNavItems = [
     title: "Graph",
     href: "/graph",
     icon: Activity,
+  },
+  {
+    title: "Review",
+    href: "/review",
+    icon: Brain,
+  },
+  {
+    title: "Maintenance",
+    href: "/maintenance",
+    icon: Wrench,
   },
   {
     title: "Research",

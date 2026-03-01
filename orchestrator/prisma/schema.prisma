@@ -68,12 +68,32 @@ model Asset {
 // ==========================================
 // 2. Entity Layer (Stable Memory Skeleton)
 // ==========================================
+enum EntityStatus {
+  ACTIVE
+  MERGED
+  ARCHIVED
+  DELETED
+}
+
 model Entity {
   id             String  @id @default(uuid())
   type           String // PERSON, ORG, LOCATION, EVENT, TOPIC, DOCUMENT, etc.
   canonicalName  String
   normalizedName String
   description    String? @db.Text
+
+  // 别名列表，用于存储实体的其他名称
+  aliases String[] @default([])
+
+  // 实体状态
+  status EntityStatus @default(ACTIVE)
+
+  // 合并目标实体ID（当 status = MERGED 时有效）
+  mergedIntoId String?
+  mergedInto   Entity?  @relation("EntityMerge", fields: [mergedIntoId], references: [id])
+
+  // 反向关系：哪些实体合并到了这个实体
+  mergedFrom Entity[] @relation("EntityMerge")
 
   firstSeenAt     DateTime @default(now())
   lastSeenAt      DateTime @default(now())
@@ -89,6 +109,44 @@ model Entity {
   embeddings      Embedding[]
 
   @@index([normalizedName])
+  @@index([status])
+  @@index([mergedIntoId])
+}
+
+// ==========================================
+// 2.5 Merge Log (Entity Merge Operations)
+// ==========================================
+enum MergeOperationType {
+  PREVIEW
+  MERGE
+  ROLLBACK
+}
+
+model MergeLog {
+  id            String            @id @default(uuid())
+  operation     MergeOperationType
+  keepEntityId  String
+  mergeEntityId String
+  taskId        String?
+  userId        String?
+
+  // 合并前的状态快照
+  snapshot Json
+
+  // 操作详情
+  details Json
+
+  // 操作结果
+  success   Boolean  @default(true)
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([keepEntityId])
+  @@index([mergeEntityId])
+  @@index([taskId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 // ==========================================
@@ -260,4 +318,273 @@ enum FeedbackType {
   RATING
   CORRECTION
   FLAG
+}
+
+// ==========================================
+// Phase 3: Spaced Repetition System
+// ==========================================
+
+model ReviewCard {
+  id                String   @id @default(uuid())
+  userId            String
+  capsuleId         String?
+  
+  // Card Content
+  front             String   @db.Text
+  back              String   @db.Text
+  cardType          CardType @default(FLASHCARD)
+  
+  // SM-2 Algorithm Parameters
+  easinessFactor    Float    @default(2.5)
+  interval          Int      @default(0)  // days
+  repetitionCount   Int      @default(0)
+  
+  // Scheduling
+  nextReviewAt      DateTime @default(now())
+  lastReviewedAt    DateTime?
+  status            ReviewStatus @default(NEW)
+  
+  // Statistics
+  totalReviews      Int      @default(0)
+  correctCount      Int      @default(0)
+  streak            Int      @default(0)
+  
+  // Metadata
+  tags              String[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  reviewLogs        ReviewLog[]
+  sessions          ReviewSessionCard[]
+
+  @@index([userId, nextReviewAt])
+  @@index([userId, status])
+  @@index([capsuleId])
+}
+
+model ReviewSession {
+  id                String   @id @default(uuid())
+  userId            String
+  startedAt         DateTime @default(now())
+  endedAt           DateTime?
+  
+  // Statistics
+  cardsReviewed     Int      @default(0)
+  correctCount      Int      @default(0)
+  incorrectCount    Int      @default(0)
+  averageTimePerCard Float?
+  
+  cards             ReviewSessionCard[]
+  logs              ReviewLog[]
+
+  @@index([userId, startedAt])
+}
+
+model ReviewSessionCard {
+  id              String   @id @default(uuid())
+  sessionId       String
+  cardId          String
+  orderIndex      Int
+  
+  session         ReviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  card            ReviewCard    @relation(fields: [cardId], references: [id])
+
+  @@unique([sessionId, cardId])
+  @@index([sessionId, orderIndex])
+}
+
+model ReviewLog {
+  id                String   @id @default(uuid())
+  userId            String
+  cardId            String
+  sessionId         String?
+  
+  // User Response
+  rating            Int      // 0-5
+  responseTime      Int      // seconds
+  reviewedAt        DateTime @default(now())
+  
+  // Algorithm State (snapshot)
+  previousInterval  Int
+  newInterval       Int
+  previousEF        Float
+  newEF             Float
+
+  card              ReviewCard    @relation(fields: [cardId], references: [id])
+  session           ReviewSession? @relation(fields: [sessionId], references: [id])
+
+  @@index([userId, reviewedAt])
+  @@index([cardId, reviewedAt])
+}
+
+enum CardType {
+  FLASHCARD
+  QA
+  FILL_BLANK
+  CLOZE
+}
+
+enum ReviewStatus {
+  NEW
+  SCHEDULED
+  LEARNING
+  REVIEW
+  MASTERED
+  SUSPENDED
+}
+
+// ==========================================
+// Phase 3: Knowledge Graph Maintenance
+// ==========================================
+
+model MaintenanceTask {
+  id                String   @id @default(uuid())
+  userId            String
+  
+  // Task Info
+  taskType          MaintenanceType
+  description       String   @db.Text
+  status            MaintenanceStatus @default(PENDING)
+  confidence        Float    // 0-1
+  
+  // Affected Entities/Relations
+  sourceEntityId    String?
+  targetEntityId    String?
+  relationId        String?
+  
+  // Changes (JSON for flexibility)
+  changes           Json?    // MaintenanceChange[]
+  
+  // Review
+  reviewedAt        DateTime?
+  reviewedBy        ReviewerType?
+  reviewComment     String?
+  
+  // Execution
+  appliedAt         DateTime?
+  errorMessage      String?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, taskType])
+  @@index([confidence])
+}
+
+enum MaintenanceType {
+  ENTITY_MERGE
+  RELATION_DISCOVERY
+  TAG_OPTIMIZATION
+  STALE_DETECTION
+  ORPHAN_CLEANUP
+}
+
+enum MaintenanceStatus {
+  PENDING
+  AUTO_APPROVED
+  AWAITING_USER_REVIEW
+  APPROVED
+  REJECTED
+  APPLIED
+  FAILED
+  REVERTED
+}
+
+enum ReviewerType {
+  USER
+  SYSTEM
+}
+
+// ==========================================
+// Phase 3: Insights System
+// ==========================================
+
+model Insight {
+  id                String   @id @default(uuid())
+  userId            String
+  
+  // Content
+  type              InsightType
+  title             String
+  description       String   @db.Text
+  priority          Priority
+  priorityScore     Int      // 0-100
+  status            InsightStatus @default(NEW)
+  
+  // Related Data
+  relatedCapsuleIds String[]
+  relatedEntityIds  String[]
+  suggestedAction   String?
+  extractedData     Json?    // Type-specific data (dates, etc.)
+  
+  // Timing
+  generatedAt       DateTime @default(now())
+  expiresAt         DateTime?
+  actionedAt        DateTime?
+  snoozedUntil      DateTime?
+  
+  // Feedback
+  userFeedback      UserFeedback?
+  
+  // Deduplication
+  contentHash       String   @unique
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, priority])
+  @@index([userId, generatedAt])
+  @@index([expiresAt])
+}
+
+enum InsightType {
+  TASK_REMINDER
+  KNOWLEDGE_GAP
+  CONNECTION
+  ACTION_SUGGESTION
+  HABIT_ANALYSIS
+  OPPORTUNITY
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum InsightStatus {
+  NEW
+  VIEWED
+  ACTIONED
+  DISMISSED
+  SNOOZED
+  EXPIRED
+  COMPLETED
+}
+
+enum UserFeedback {
+  HELPFUL
+  NOT_HELPFUL
+}
+
+// ==========================================
+// Phase 3: User Settings
+// ==========================================
+
+model UserSettings {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  
+  // Spaced Repetition Settings (JSON for flexibility)
+  spacedRepetition  Json     // SpacedRepetitionSettings
+  
+  // Graph Maintenance Settings
+  graphMaintenance  Json     // GraphMaintenanceSettings
+  
+  // Insights Settings
+  insights          Json     // InsightsSettings
+  
+  updatedAt         DateTime @updatedAt
 }
